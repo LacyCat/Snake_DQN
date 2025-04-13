@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: snake-dqn
+Version: 0.3.0
+Summary: A simple DQN implementation for Snake game
+Home-page: https://github.com/LacyCat/Snake_DQN
+Author: LacyCat
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Requires-Dist: torch>=2.0
+Requires-Dist: pygame>=2.1.0
+Requires-Dist: numpy
+Requires-Dist: gym

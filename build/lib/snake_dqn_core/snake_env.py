@@ -44,8 +44,6 @@ class SnakeGameEnv:
         new_head = (head_x + dir_x, head_y + dir_y)
 
         reward = 0
-        
-        reward -=  0.01
 
         # 충돌 체크
         if (new_head in self.snake) or not (0 <= new_head[0] < self.width) or not (0 <= new_head[1] < self.height):
