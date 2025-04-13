@@ -5,6 +5,7 @@ import random
 import os
 from collections import deque
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 
 # CUDA 디바이스 설정
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -113,6 +114,7 @@ def train_hybrid_dqn(env, episodes=500, model_path=None, debug=False):
     update_target_every = 10
     best_score = -float("inf")
 
+    writer = SummaryWriter(log_dir="runs/Hybrid_DQN_experiment")
     # 학습률 스케줄러
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
 
@@ -184,3 +186,4 @@ def train_hybrid_dqn(env, episodes=500, model_path=None, debug=False):
 
         if (episode + 1) % update_target_every == 0:
             target_model.load_state_dict(model.state_dict())
+    writer.close()
