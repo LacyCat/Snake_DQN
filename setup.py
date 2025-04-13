@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='snake-dqn',
-    version='0.1.5',
+    version='0.2.5',
     packages=find_packages(include=["snake_dqn_core", "snake_dqn_core.*"]),
     install_requires=[
         'torch>=2.0',
