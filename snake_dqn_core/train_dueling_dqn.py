@@ -138,7 +138,7 @@ def train_dueling_dqn(env, episodes=500, model_path="best_model.pth"):
                         torch.save({
                             "model_state_dict": model.state_dict(),
                             "epsilon": epsilon
-                        }, "best_play_DQN.pth")
+                        }, "best_play_Dueling_DQN.pth")
                     print("New best model saved!")
 
                 break
