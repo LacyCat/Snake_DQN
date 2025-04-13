@@ -69,7 +69,7 @@ class ReplayBuffer:
         return len(self.buffer)
 
 # DQN 학습 함수
-def train_hybrid_dqn(env, episodes=500, model_path="best_model.pth"):
+def train_hybrid_dqn(env, episodes=500, model_path="best_model.pth", debug=False):
     input_dim = 9
     output_dim = 3
     model = Hybrid_DQN(input_dim, output_dim).to(device)
@@ -132,7 +132,13 @@ def train_hybrid_dqn(env, episodes=500, model_path="best_model.pth"):
                 optimizer.step()
 
             if done:
-                print(f"Episode {episode+1}, Score: {env.score}, Reward: {total_reward:.2f}, Epsilon: {epsilon:.3f}")
+                if debug:
+                    loss_val = loss.item() if 'loss' in locals() else 0.0
+                    print(f"Episode {episode+1}, Score: {env.score}, Reward: {total_reward:.2f}, Epsilon: {epsilon:.3f}, "
+                        f"Gamma: {gamma}, Batch Size: {batch_size}, Eps Min: {epsilon_min}, Eps Decay: {epsilon_decay:.4f}, "
+                        f"Loss: {loss_val:.4f}")
+                else:
+                    print(f"Episode {episode+1}, Score: {env.score}, Reward: {total_reward:.2f}, Epsilon: {epsilon:.3f}")
 
                 # 최고 점수 저장
                 if total_reward > best_score:
