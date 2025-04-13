@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import random
+import os
 from collections import deque
 
 # CUDA 디바이스 설정
@@ -9,9 +10,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # DQN 모델 정의
-class DQN(nn.Module):
+class Doubling_DQN(nn.Module):
     def __init__(self, input_dim, output_dim):
-        super(DQN, self).__init__()
+        super(Doubling_DQN, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, 256),  # 더 큰 hidden layer
             nn.ReLU(),
@@ -46,14 +47,14 @@ class ReplayBuffer:
         return len(self.buffer)
 
 # DQN 학습 함수
-def train_dqn(env, episodes=500, model_path="best_model.pth"):
+def train_doubling_dqn(env, episodes=500, model_path="best_model.pth"):
     input_dim = 9
     output_dim = 3
-    model = DQN(input_dim, output_dim).to(device)
-    target_model = DQN(input_dim, output_dim).to(device)
+    model = Doubling_DQN(input_dim, output_dim).to(device)
+    target_model = Doubling_DQN(input_dim, output_dim).to(device)
 
     # 모델이 저장된 경우, 불러오기
-    if model_path:
+    if model_path and os.path.exists(model_path):
         try:
             checkpoint = torch.load(model_path)
             model.load_state_dict(checkpoint["model_state_dict"])
@@ -98,15 +99,17 @@ def train_dqn(env, episodes=500, model_path="best_model.pth"):
                 states, actions, rewards, next_states, dones = buffer.sample(batch_size)
 
                 q_values = model(states)
-                next_q_values = target_model(next_states)
+                next_actions = model(next_states).argmax(1, keepdim=True)  # ✅ Double DQN: online model로 argmax
+                next_q_values = target_model(next_states).gather(1, next_actions).squeeze(1)  # ✅ target model로 Q값 추출
 
-                q_target = rewards + gamma * torch.max(next_q_values, dim=1)[0] * (1 - dones)
+                q_target = rewards + gamma * next_q_values * (1 - dones)
                 q_current = q_values.gather(1, actions.unsqueeze(1)).squeeze()
 
                 loss = criterion(q_current, q_target.detach())
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+
 
             if done:
                 print(f"Episode {episode+1}, Score: {env.score}, Reward: {total_reward:.2f}, Epsilon: {epsilon:.3f}")
@@ -123,7 +126,7 @@ def train_dqn(env, episodes=500, model_path="best_model.pth"):
                         torch.save({
                             "model_state_dict": model.state_dict(),
                             "epsilon": epsilon
-                        }, "best_play.pth")
+                        }, "best_play_Double_DQN.pth")
                     print("New best model saved!")
 
                 break
@@ -132,8 +135,3 @@ def train_dqn(env, episodes=500, model_path="best_model.pth"):
 
         if (episode + 1) % update_target_every == 0:
             target_model.load_state_dict(model.state_dict())
-
-from snake_env import SnakeGameEnv
-if __name__ == "__main__":
-    env = SnakeGameEnv(render_mode=True)
-    train_dqn(env, episodes=450, model_path="D:/SnakeAI/best_play.pth") # 모델을 처음부터 학습
