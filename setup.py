@@ -2,13 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name='snake-dqn',
-    version='1.2.1',
+    version='2.0.0',
     packages=find_packages(include=["snake_dqn_core", "snake_dqn_core.*"]),
     install_requires=[
         'torch>=2.0',
         'pygame>=2.1.0',
         'numpy',
         'gym',  # 필요하다면 추가
+        'tensorboard>=2.19.0',
     ],
     author='LacyCat',
     description='A simple DQN implementation for Snake game',

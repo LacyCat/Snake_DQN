@@ -17,12 +17,12 @@ class Hybrid_DQN(nn.Module):
         super(Hybrid_DQN, self).__init__()
         self.feature = nn.Sequential(
             nn.Linear(input_dim, 256),
-            nn.BatchNorm1d(256),
             nn.ReLU(),
+            nn.LayerNorm(256),
             nn.Dropout(0.2),
             nn.Linear(256, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.LayerNorm(128)
         )
 
         self.value_stream = nn.Sequential(
@@ -118,22 +118,23 @@ def train_hybrid_dqn(env, episodes=500, model_path=None, debug=False):
     # 학습률 스케줄러
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
 
+    total_rewards = 0  # 평균 보상을 계산하기 위해 total_rewards 추가
+
     for episode in range(episodes):
         state = env.reset()
-        total_reward = 0
+        episode_reward = 0  # 각 에피소드별 보상 초기화
 
         while True:
             if random.random() < epsilon:
-                action = random.randint(0, 2)
+                action = random.randint(0, output_dim - 1)
             else:
                 with torch.no_grad():
-                    q_values = model(torch.tensor(state).float().unsqueeze(0).to(device))
-                    action = torch.argmax(q_values).item()
+                    action = model(torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)).argmax().item()
 
             next_state, reward, done, _ = env.step(action)
             buffer.push(state, action, reward, next_state, done)
             state = next_state
-            total_reward += reward
+            episode_reward += reward
 
             env.render()
 
@@ -141,32 +142,52 @@ def train_hybrid_dqn(env, episodes=500, model_path=None, debug=False):
                 states, actions, rewards, next_states, dones, weights, indices = buffer.sample(batch_size)
 
                 q_values = model(states)
-                next_q_values = target_model(next_states)
 
-                q_target = rewards + gamma * torch.max(next_q_values, dim=1)[0] * (1 - dones)
+                next_actions = model(next_states).argmax(1)
+                next_q_values = target_model(next_states).gather(1, next_actions.unsqueeze(1)).squeeze()
+                q_target = rewards + gamma * next_q_values * (1 - dones)
+
                 q_current = q_values.gather(1, actions.unsqueeze(1)).squeeze()
 
                 loss = (weights * criterion(q_current, q_target.detach())).mean()
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                scheduler.step()
 
                 # 우선순위 업데이트
-                td_errors = (q_current - q_target.detach()).abs().cpu().numpy()
+                td_errors = (q_current - q_target.detach()).abs().detach().cpu().numpy()
                 buffer.update_priorities(indices, td_errors)
 
             if done:
+                total_rewards += episode_reward  # 모든 에피소드 보상 합산
+                if 'loss' in locals():
+                    writer.add_scalar("Loss/train", loss.item(), episode)
+                else:
+                    writer.add_scalar("Loss/train", 0.0, episode)
+                writer.add_scalar("LearningRate", scheduler.get_last_lr()[0], episode)
+                try:
+                    writer.add_scalar("Q_value/max", q_values.max().item(), episode)
+                except NameError:
+                    writer.add_scalar("Q_value/max", 0.0, episode)
+                try:
+                    writer.add_scalar("Q_value/min", q_values.min().item(), episode)
+                except NameError:
+                    writer.add_scalar("Q_value/min", 0.0, episode)
+                writer.add_scalar("Reward/episode", episode_reward, episode)
+                writer.add_scalar("Epsilon", epsilon, episode)
+
                 if debug:
                     loss_val = loss.item() if 'loss' in locals() else 0.0
-                    print(f"Episode {episode+1}, Score: {env.score}, Reward: {total_reward:.2f}, Epsilon: {epsilon:.3f}, "
+                    print(f"Episode {episode+1}, Score: {env.score}, Reward: {episode_reward:.2f}, Epsilon: {epsilon:.3f}, "
                         f"Gamma: {gamma}, Batch Size: {batch_size}, Eps Min: {epsilon_min}, Eps Decay: {epsilon_decay:.4f}, "
                         f"Loss: {loss_val:.4f}")
                 else:
-                    print(f"Episode {episode+1}, Score: {env.score}, Reward: {total_reward:.2f}, Epsilon: {epsilon:.3f}")
+                    print(f"Episode {episode+1}, Score: {env.score}, Reward: {episode_reward:.2f}, Epsilon: {epsilon:.3f}")
 
                 # 최고 점수 저장
-                if total_reward > best_score:
-                    best_score = total_reward
+                if episode_reward > best_score:
+                    best_score = episode_reward
                     if model_path:
                         torch.save({
                             'model_state_dict': model.state_dict(),
@@ -182,8 +203,24 @@ def train_hybrid_dqn(env, episodes=500, model_path=None, debug=False):
                 break
 
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
-        scheduler.step()
 
         if (episode + 1) % update_target_every == 0:
             target_model.load_state_dict(model.state_dict())
+
+    # 전체 에피소드 종료 후, 평균 보상 및 최종 손실 기록
+    avg_reward = total_rewards / episodes
+    writer.add_hparams(
+        {
+            "lr": 0.0005,
+            "batch_size": batch_size,
+            "gamma": gamma,
+            "epsilon_decay": epsilon_decay
+        },
+        {
+            "hparam/avg_reward": avg_reward,
+            "hparam/final_loss": loss.item() if 'loss' in locals() else 0
+        }
+    )
+        
     writer.close()
+

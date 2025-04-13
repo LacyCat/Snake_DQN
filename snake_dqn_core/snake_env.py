@@ -37,21 +37,25 @@ class SnakeGameEnv:
         if self.done:
             return self.get_state(), 0, True, {}
 
+        old_direction = self.direction
         self.change_direction(action)
 
         head_x, head_y = self.snake[0]
         dir_x, dir_y = self.direction
         new_head = (head_x + dir_x, head_y + dir_y)
 
+        old_distance = abs(self.food[0] - head_x) + abs(self.food[1] - head_y)
         reward = -0.01  # reward shaping: step penalty
-
+        if action != 0 and self.direction == (old_direction[0], old_direction[1]):
+            reward -= 0.05
         if (new_head in self.snake) or not (0 <= new_head[0] < self.width) or not (0 <= new_head[1] < self.height):
             self.done = True
             reward = -1
             return self.get_state(), reward, self.done, {}
 
         self.snake.insert(0, new_head)
-
+        new_distance = abs(self.food[0] - new_head[0]) + abs(self.food[1] - new_head[1])
+        reward += (old_distance - new_distance) * 0.05
         if new_head == self.food:
             reward = 1
             self.score += 1
